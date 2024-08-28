@@ -61,7 +61,10 @@ def parse_date(bib):
         date = bib.get("date")
         if date:
             date = date.value
-            year, month, day = date.split("-")
+            try:
+                year, month, day = date.split("-")
+            except:
+                year, month, day = date.split()
         else:
             year = bib.get("year").value
             month = bib.get("month").value if bib.get("month") else ""
@@ -94,7 +97,7 @@ def parse_date(bib):
             "nov": "November",
             "12": "December",
             "dec": "December",
-        }[month.strip()]
+        }[month.lower().strip()]
 
         if month:
             date = f"{day} {month}, {year}"
@@ -254,12 +257,14 @@ def html(bib, doc: Optional[Doc] = None) -> Doc:
             log.exception(f"ENTRY : {bib}")
             raise
 
-    elif isinstance(bib, bibtexparser.library.Library):
+    elif isinstance(bib, bibtexparser.Library):
         html(bib.entries, doc)
         return doc
 
     else:
         assert False
+
+    return doc
 
 
 @click.command()
