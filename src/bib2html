@@ -22,7 +22,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 HOMEPAGES = {}
-
+DOISVC = "https://doi.org"
 
 def authors(doc, bib):
     authors = bib.get("author").value
@@ -207,7 +207,7 @@ def doi(doc, bib):
     with doc.tag("span", klass="doi"):
         doi = bib.get("doi")
         if doi:
-            with doc.tag("a", href=doi.value):
+            with doc.tag("a", href=f"{DOISVC}/{doi.value}"):
                 doc.asis(f"doi:{doi.value} ")
 
 
