@@ -55,33 +55,6 @@ MONTHS = {
 MONTHS.update([(MONTHS[k], k) for k in MONTHS])
 
 
-def authors(doc, bib):
-    authors = bib.get("author").value
-    with doc.tag("span", klass="authors"):
-        for i, author in enumerate(authors):
-            if i == 0:
-                pass
-            elif i + 1 == len(authors):
-                doc.text(" and ")
-            else:
-                doc.text(", ")
-
-            klass = "author"
-            key = f"{author.first[0]} {author.last[0]}"
-            homepage = HOMEPAGES.get(key)
-
-            if (author.first[0], author.last[0]) == ("Richard", "Mortier"):
-                klass += " highlight"
-
-            author.first = [f"{author.first[0][0].strip()}."]
-            with doc.tag("span", klass=klass):
-                if homepage:
-                    with doc.tag("a", href=homepage):
-                        doc.text(f"{author.merge_last_name_first}")
-                else:
-                    doc.text(f"{author.merge_last_name_first}")
-
-
 def parse_date(bib):
     date = bib.get("issue_date")
     if date:
@@ -116,6 +89,33 @@ def parse_date(bib):
     return isodate.strip("-"), formatted, year
 
 
+def authors(doc, bib):
+    authors = bib.get("author").value
+    with doc.tag("span", klass="authors"):
+        for i, author in enumerate(authors):
+            if i == 0:
+                pass
+            elif i + 1 == len(authors):
+                doc.text(" and ")
+            else:
+                doc.text(", ")
+
+            klass = "author"
+            key = f"{author.first[0]} {author.last[0]}"
+            homepage = HOMEPAGES.get(key)
+
+            if (author.first[0], author.last[0]) == ("Richard", "Mortier"):
+                klass += " highlight"
+
+            author.first = [f"{author.first[0][0].strip()}."]
+            with doc.tag("span", klass=klass):
+                if homepage:
+                    with doc.tag("a", href=homepage):
+                        doc.text(f"{author.merge_last_name_first}")
+                else:
+                    doc.text(f"{author.merge_last_name_first}")
+
+
 def year(doc, year):
     with doc.tag("span", klass="year"):
         doc.text(f" ({year}). ")
@@ -124,14 +124,8 @@ def year(doc, year):
 def title(doc, bib):
     title = bib.get("title").value
     with doc.tag("span", klass="title"):
-        doc.asis(f"&ldquo;{title}&rdquo;. ")
-
-
-def publisher(doc, bib):
-    publisher = bib.get("publisher")
-    if publisher:
-        with doc.tag("span", klass="publisher"):
-            doc.text(f"{publisher.value.strip()}. ")
+        doc.asis(f"&ldquo;{title}&rdquo;")
+    doc.text(". ")
 
 
 def venue(doc, bib):
@@ -141,13 +135,13 @@ def venue(doc, bib):
             doc.text("In ")
             venue = bib["booktitle"]
 
+            pages = bib.get("pages")
+            if pages:
+                addendum += f" pp.&nbsp;{pages.value}"
+
             address = bib.get("address")
             if address:
                 addendum += f". {address.value}"
-
-            pages = bib.get("pages")
-            if pages:
-                addendum += f". pp.&nbsp;{pages.value}"
 
         case "article":
             doc.text("In ")
@@ -183,6 +177,7 @@ def venue(doc, bib):
         case "inbook":
             doc.text("In ")
             venue = bib.get("volume")
+
             if not venue:
                 venue = bib.get("booktitle")
             venue = venue.value
@@ -200,38 +195,50 @@ def venue(doc, bib):
             venue = "UNKNOWN VENUE"
 
     with doc.tag("span", klass="venue"):
-        doc.asis(f"{venue.strip()}. ")
+        doc.asis(f"{venue.strip()}")
 
     if len(addendum) > 0:
-        doc.asis(f"{addendum}. ")
+        doc.asis(f"{addendum}")
+
+
+def publisher(doc, bib):
+    publisher = bib.get("publisher")
+    if publisher:
+        with doc.tag("span", klass="publisher"):
+            doc.text(f" ({publisher.value.strip()})")
 
 
 def date(doc, date):
     with doc.tag("span", klass="date"):
-        doc.text(f"{date}. ")
+        doc.text(f"{date}")
+    doc.text(". ")
 
 
 def note(doc, bib):
-    with doc.tag("span", klass="note"):
-        note = bib.get("note")
-        if note:
-            doc.text(f"{note.value.strip()}. ".replace("..", "."))
+    note = bib.get("note")
+    if note:
+        with doc.tag("span", klass="note"):
+            doc.text(f"{note.value.strip()}".replace("..", "."))
+        doc.text(". ")
 
 
 def doi(doc, bib):
-    with doc.tag("span", klass="doi"):
-        doi = bib.get("doi")
-        if doi:
+    doi = bib.get("doi")
+    if doi:
+        with doc.tag("span", klass="doi"):
             with doc.tag("a", href=f"{DOISVC}/{doi.value}"):
-                doc.asis(f"doi:{doi.value} ")
+                doc.asis(f"doi:{doi.value}")
+        doc.text(". ")
 
 
 def url(doc, bib):
-    with doc.tag("span", klass="url"):
-        url = bib.get("url")
-        if url:
+    url = bib.get("url")
+    log.debug(f"{url=} {bib=}")
+    if url:
+        with doc.tag("span", klass="url"):
             with doc.tag("a", href=url.value):
                 doc.asis(f"{url.value}")
+        doc.text(". ")
 
 
 def entry(doc, bib):
@@ -246,11 +253,17 @@ def entry(doc, bib):
 
     with doc.tag("li", id=bib.key, klass=" ".join(klass)):
         _isodate, fmtdate, yr = parse_date(bib)
+
         authors(doc, bib)
         year(doc, yr)
+
         title(doc, bib)
+
         venue(doc, bib)
         publisher(doc, bib)
+        if bib.entry_type != "unpublished":
+            doc.text(". ")
+
         date(doc, fmtdate)
         note(doc, bib)
         doi(doc, bib)
