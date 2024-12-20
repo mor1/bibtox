@@ -23,6 +23,37 @@ log = logging.getLogger(__name__)
 HOMEPAGES = {}
 DOISVC = "https://doi.org"
 
+ABBREVIATIONS = {
+    "jan": "January",
+    "feb": "February",
+    "mar": "March",
+    "apr": "April",
+    "may": "May",
+    "jun": "June",
+    "jul": "July",
+    "aug": "August",
+    "sep": "September",
+    "oct": "October",
+    "nov": "November",
+    "dec": "December",
+}
+
+MONTHS = {
+    "01": "January",
+    "02": "February",
+    "03": "March",
+    "04": "April",
+    "05": "May",
+    "06": "June",
+    "07": "July",
+    "08": "August",
+    "09": "September",
+    "10": "October",
+    "11": "November",
+    "12": "December",
+}
+MONTHS.update([(MONTHS[k], k) for k in MONTHS])
+
 
 def authors(doc, bib):
     authors = bib.get("author").value
@@ -56,55 +87,33 @@ def parse_date(bib):
     if date:
         date = date.value
         month, year = date.split(" ")
+        day = ""
 
     else:
         date = bib.get("date")
         if date:
             date = date.value
-            try:
-                year, month, day = date.split("-")
-            except Exception:
-                year, month, day = date.split()
+            year, month, *day = date.split("-") if "-" in date else date.split()
         else:
             year = bib.get("year").value
             month = bib.get("month").value if bib.get("month") else ""
             month, *day = month.split("#")
-            day = " ".join(day if day else "").strip()
 
-        month = {
-            "": "",
-            "01": "January",
-            "jan": "January",
-            "02": "Feburary",
-            "feb": "February",
-            "03": "March",
-            "mar": "March",
-            "04": "April",
-            "apr": "April",
-            "05": "May",
-            "may": "May",
-            "06": "June",
-            "jun": "June",
-            "07": "July",
-            "jul": "July",
-            "08": "August",
-            "aug": "August",
-            "09": "September",
-            "sep": "September",
-            "10": "October",
-            "oct": "October",
-            "11": "November",
-            "nov": "November",
-            "12": "December",
-            "dec": "December",
-        }[month.lower().strip()]
+    day = " ".join(day if day else "").strip().strip('"')
 
-        if month:
-            date = f"{day} {month}, {year}"
-        else:
-            date = year
+    month = month.strip()
+    month = ABBREVIATIONS[month] if month in ABBREVIATIONS else month
+    month = MONTHS[month] if len(month) > 2 else month
 
-    return date, year, month
+    isodate = f"{year}-{month}-{day}" if month else year
+    formatted = (
+        f"{day} {MONTHS[month]}, {year}"
+        if day
+        else f"{MONTHS[month]} {year}"
+        if month
+        else f"{year}"
+    )
+    return isodate.strip("-"), formatted, year
 
 
 def year(doc, year):
@@ -122,7 +131,7 @@ def publisher(doc, bib):
     publisher = bib.get("publisher")
     if publisher:
         with doc.tag("span", klass="publisher"):
-            doc.text(f" {publisher.value.strip()} ")
+            doc.text(f" {publisher.value.strip()}. ")
 
 
 def venue(doc, bib):
@@ -220,8 +229,6 @@ def url(doc, bib):
 
 
 def entry(doc, bib):
-    # log.debug(f"{bib=}")
-
     klass = ["paper"]
     match bib.entry_type:
         case "article":
@@ -229,16 +236,16 @@ def entry(doc, bib):
         case "inproceedings":
             klass += ["conference"]
         case _:
-            klass += [entry.entry_type]
+            klass += [bib.entry_type]
 
     with doc.tag("li", id=bib.key, klass=" ".join(klass)):
-        d, y, _ = parse_date(bib)
+        _isodate, fmtdate, yr = parse_date(bib)
         authors(doc, bib)
-        year(doc, y)
+        year(doc, yr)
         title(doc, bib)
         venue(doc, bib)
         publisher(doc, bib)
-        date(doc, d)
+        date(doc, fmtdate)
         note(doc, bib)
         doi(doc, bib)
         url(doc, bib)
@@ -289,7 +296,6 @@ def main(
                 mw.LatexDecodingMiddleware(),
                 mw.SeparateCoAuthors(),
                 mw.SplitNameParts(),
-                mw.SortFieldsCustomMiddleware(order=("year", "authors")),
             ],
         )
 
@@ -313,7 +319,10 @@ def main(
         with doc.tag("section", klass="papers"):
             doc.text(section)
         with doc.tag("ol", klass="papers"):
-            html(library, doc)
+            for e in sorted(
+                library.entries, key=lambda e: parse_date(e)[0], reverse=True
+            ):
+                entry(doc, e)
 
         print(indent(doc.getvalue()))
 
