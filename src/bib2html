@@ -190,6 +190,12 @@ def venue(doc, bib):
         case "unpublished":
             venue = ""
 
+        case "book":
+            venue = ""
+
+        case "techreport":
+            venue = bib["type"]
+
         case _:
             venue = "UNKNOWN VENUE"
 
