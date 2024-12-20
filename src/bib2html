@@ -63,7 +63,7 @@ def parse_date(bib):
             date = date.value
             try:
                 year, month, day = date.split("-")
-            except:
+            except Exception:
                 year, month, day = date.split()
         else:
             year = bib.get("year").value
