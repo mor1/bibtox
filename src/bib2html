@@ -118,7 +118,7 @@ def parse_date(bib):
 
 def year(doc, year):
     with doc.tag("span", klass="year"):
-        doc.text(f" ({year}) ")
+        doc.text(f" ({year}). ")
 
 
 def title(doc, bib):
@@ -131,7 +131,7 @@ def publisher(doc, bib):
     publisher = bib.get("publisher")
     if publisher:
         with doc.tag("span", klass="publisher"):
-            doc.text(f" {publisher.value.strip()}. ")
+            doc.text(f"{publisher.value.strip()}. ")
 
 
 def venue(doc, bib):
@@ -200,7 +200,7 @@ def venue(doc, bib):
             venue = "UNKNOWN VENUE"
 
     with doc.tag("span", klass="venue"):
-        doc.asis(f"{venue.strip()}")
+        doc.asis(f"{venue.strip()}. ")
 
     if len(addendum) > 0:
         doc.asis(f"{addendum}. ")
