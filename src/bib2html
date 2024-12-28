@@ -310,6 +310,11 @@ def main(input, debug, sort, html, bibtex):
         b, e = os.path.splitext(f)
         config = {"sections": {b: [input.name]}}
 
+    doc = Doc() if html else None
+    if html:
+        assert doc is not None
+        doc.text("{{dummy}}\n")
+
     for section, filenames in config["sections"].items():
         log.info(f"{section=} {filenames=}")
         content = ""
@@ -349,8 +354,7 @@ def main(input, debug, sort, html, bibtex):
         )
 
         if html:
-            doc = Doc()
-            doc.text("{{dummy}}\n")
+            assert doc is not None
             with doc.tag("section", klass="papers"):
                 doc.text(section)
             with doc.tag("ol", klass="papers"):
