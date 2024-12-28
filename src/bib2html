@@ -270,37 +270,45 @@ def entry(doc, bib):
         url(doc, bib)
 
 
-@click.command()
-@click.argument("config", type=click.File("r"))
+@click.command(context_settings={"show_default": True})
+@click.argument("input", type=click.File("r"))
 @click.option("--debug", default=False, is_flag=True)
-def main(
-    config,
-    debug,
-):
+@click.option("--sort/--no-sort", default=True, help="Sort entries.")
+@click.option("--html/--no-html", default=False, help="Output HTML.")
+@click.option("--bibtex/--no-bibtex", default=False, help="Output BibTex.")
+def main(input, debug, sort, html, bibtex):
+    """Process BibTeX/BibLaTeX input file.
+
+    Sort entries if requested. Output to HTML and/or BibTeX/BibLaTeX.
+    """
+
     if debug:
         log.setLevel(logging.DEBUG)
 
-    config = json.load(config)
+    config = json.load(input) if input.name.endswith(".json") else None
     log.debug(f"{config=}")
 
     global HOMEPAGES
 
-    homepages = config.get("homepages")
+    homepages = config.get("homepages") if config else None
     if homepages:
         with open(homepages) as f:
             HOMEPAGES = json.load(f)
     log.debug(f"{HOMEPAGES=}")
 
-    strings = config.get("strings", "")
-    if len(strings) > 0:
+    strings = config.get("strings", "") if config else ""
+    if strings and len(strings) > 0:
         with open(strings) as f:
             strings = f.read()
     log.debug(f"{strings=}")
 
-    bibdir = config.get("bibdir", ".")
+    bibdir = config.get("bibdir", ".") if config else "."
     log.debug(f"{bibdir=}")
 
-    print("{{dummy}}")
+    if not config:
+        _p, f = os.path.split(input.name)
+        b, e = os.path.splitext(f)
+        config = {"sections": {b: [input.name]}}
 
     for section, filenames in config["sections"].items():
         log.info(f"{section=} {filenames=}")
@@ -334,16 +342,35 @@ def main(
                     f"{failure.start_line}({failure.duplicate_keys}) {failure.raw}"
                 )
 
-        doc = Doc()
-        with doc.tag("section", klass="papers"):
-            doc.text(section)
-        with doc.tag("ol", klass="papers"):
-            for e in sorted(
-                library.entries, key=lambda e: parse_date(e)[0], reverse=True
-            ):
-                entry(doc, e)
+        entries = (
+            sorted(library.entries, key=lambda e: parse_date(e)[0], reverse=True)
+            if sort
+            else library.entries
+        )
 
-        print(indent(doc.getvalue()))
+        if html:
+            doc = Doc()
+            doc.text("{{dummy}}\n")
+            with doc.tag("section", klass="papers"):
+                doc.text(section)
+            with doc.tag("ol", klass="papers"):
+                for e in entries:
+                    entry(doc, e)
+            print(indent(doc.getvalue()))
+
+        if bibtex:
+            bf = bibtexparser.BibtexFormat()
+            bf.value_column = "auto"
+            bf.indent = "  "
+
+            l = bibtexparser.Library(blocks=entries)
+            mws = [
+                mw.MergeNameParts(allow_inplace_modification=True),
+                mw.MergeCoAuthors(allow_inplace_modification=True),
+            ]
+            bs = bibtexparser.write_string(l, prepend_middleware=mws, bibtex_format=bf)
+            with open(f"{section}.bib", "w") as o:
+                o.write(bs)
 
 
 if __name__ == "__main__":
