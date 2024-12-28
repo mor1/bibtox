@@ -276,7 +276,7 @@ def entry(doc, bib):
 @click.option("--sort/--no-sort", default=True, help="Sort entries.")
 @click.option("--html/--no-html", default=False, help="Output HTML.")
 @click.option("--bibtex/--no-bibtex", default=False, help="Output BibTex.")
-def main(input, debug, sort, html, bibtex):
+def bib2html(input, debug, sort, html, bibtex):
     """Process BibTeX/BibLaTeX input file.
 
     Sort entries if requested. Output to HTML and/or BibTeX/BibLaTeX.
@@ -367,15 +367,17 @@ def main(input, debug, sort, html, bibtex):
             bf.value_column = "auto"
             bf.indent = "  "
 
-            l = bibtexparser.Library(blocks=entries)
+            lib = bibtexparser.Library(blocks=entries)
             mws = [
                 mw.MergeNameParts(allow_inplace_modification=True),
                 mw.MergeCoAuthors(allow_inplace_modification=True),
             ]
-            bs = bibtexparser.write_string(l, prepend_middleware=mws, bibtex_format=bf)
+            bs = bibtexparser.write_string(
+                lib, prepend_middleware=mws, bibtex_format=bf
+            )
             with open(f"{section}.bib", "w") as o:
                 o.write(bs)
 
 
 if __name__ == "__main__":
-    main()  # pyright: ignore
+    bib2html()  # pyright: ignore
