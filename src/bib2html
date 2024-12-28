@@ -310,11 +310,7 @@ def bib2html(input, debug, sort, html, bibtex):
         b, e = os.path.splitext(f)
         config = {"sections": {b: [input.name]}}
 
-    doc = Doc() if html else None
-    if html:
-        assert doc is not None
-        doc.text("{{dummy}}\n")
-
+    sections = []
     for section, filenames in config["sections"].items():
         log.info(f"{section=} {filenames=}")
         content = ""
@@ -352,21 +348,25 @@ def bib2html(input, debug, sort, html, bibtex):
             if sort
             else library.entries
         )
+        sections.append((section, entries))
 
-        if html:
-            assert doc is not None
+    if html:
+        doc = Doc()
+        doc.text("{{dummy}}\n")
+        for section, entries in sections:
             with doc.tag("section", klass="papers"):
                 doc.text(section)
             with doc.tag("ol", klass="papers"):
                 for e in entries:
                     entry(doc, e)
-            print(indent(doc.getvalue()))
+        print(indent(doc.getvalue()))
 
-        if bibtex:
-            bf = bibtexparser.BibtexFormat()
-            bf.value_column = "auto"
-            bf.indent = "  "
+    if bibtex:
+        bf = bibtexparser.BibtexFormat()
+        bf.value_column = "auto"
+        bf.indent = "  "
 
+        for section, entries in sections:
             lib = bibtexparser.Library(blocks=entries)
             mws = [
                 mw.MergeNameParts(allow_inplace_modification=True),
