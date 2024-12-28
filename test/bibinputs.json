@@ -1,0 +1,10 @@
+{
+    "bibdir": "./test",
+    "strings": "./test/strings.bib",
+    "homepages": "./test/homepages.json",
+    "sections": {
+        "Test": [
+            "test.bib"
+        ]
+    }
+}
