@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import datetime
 import json
 import logging
 import os
@@ -270,16 +271,58 @@ def entry(doc, bib):
         url(doc, bib)
 
 
+def parse(content, sort):
+    library = bibtexparser.parse_string(
+        content,
+        append_middleware=[
+            mw.LatexDecodingMiddleware(),
+            mw.SeparateCoAuthors(),
+            mw.SplitNameParts(),
+        ],
+    )
+
+    stats = {
+        "blocks": len(library.blocks),
+        "entries": len(library.entries),
+        "comments": len(library.comments),
+        "strings": len(library.strings),
+        "preamble": len(library.preambles),
+        "failures": len(library.failed_blocks),
+    }
+    log.info(f"{stats=}")
+
+    if len(library.failed_blocks) > 0:
+        for failure in library.failed_blocks:
+            log.error(f"{failure.start_line}({failure.duplicate_keys}) {failure.raw}")
+
+    entries = (
+        sorted(library.entries, key=lambda e: parse_date(e)[0], reverse=True)
+        if sort
+        else library.entries
+    )
+
+    return entries
+
+
+def comment(section):
+    dt = datetime.datetime.now().astimezone().isoformat()
+    return f"%%commment{{datetime={{{dt}}}, section={{{section}}}}}"
+
+
 @click.command(context_settings={"show_default": True})
 @click.argument("input", type=click.File("r"))
 @click.option("--debug", default=False, is_flag=True)
 @click.option("--sort/--no-sort", default=True, help="Sort entries.")
-@click.option("--html/--no-html", default=False, help="Output HTML.")
-@click.option("--bibtex/--no-bibtex", default=False, help="Output BibTex.")
-def bib2html(input, debug, sort, html, bibtex):
+@click.option("--html", default=False, is_flag=True, help="Output HTML.")
+def bibtox(
+    input,
+    debug,
+    sort,
+    html,
+):
     """Process BibTeX/BibLaTeX input file.
 
-    Sort entries if requested. Output to HTML and/or BibTeX/BibLaTeX.
+    Sort entries if requested. Output to HTML and/or BibTeX.
     """
 
     if debug:
@@ -305,50 +348,23 @@ def bib2html(input, debug, sort, html, bibtex):
     bibdir = config.get("bibdir", ".") if config else "."
     log.debug(f"{bibdir=}")
 
-    if not config:
-        _p, f = os.path.split(input.name)
-        b, e = os.path.splitext(f)
-        config = {"sections": {b: [input.name]}}
-
     sections = []
-    for section, filenames in config["sections"].items():
-        log.info(f"{section=} {filenames=}")
-        content = ""
-        for filename in filenames:
-            with open(os.path.join(bibdir, filename)) as f:
-                content += f.read()
+    if config:
+        for section, filenames in config["sections"].items():
+            log.info(f"{section=} {filenames=}")
+            content = ""
+            for filename in filenames:
+                with open(os.path.join(bibdir, filename)) as f:
+                    content += f.read()
 
-        library = bibtexparser.parse_string(
-            strings + content,
-            append_middleware=[
-                mw.LatexDecodingMiddleware(),
-                mw.SeparateCoAuthors(),
-                mw.SplitNameParts(),
-            ],
-        )
+            entries = parse(strings + content, sort)
+            sections.append((section, entries))
 
-        stats = {
-            "blocks": len(library.blocks),
-            "entries": len(library.entries),
-            "comments": len(library.comments),
-            "strings": len(library.strings),
-            "preamble": len(library.preambles),
-            "failures": len(library.failed_blocks),
-        }
-        log.info(f"{stats=}")
-
-        if len(library.failed_blocks) > 0:
-            for failure in library.failed_blocks:
-                log.error(
-                    f"{failure.start_line}({failure.duplicate_keys}) {failure.raw}"
-                )
-
-        entries = (
-            sorted(library.entries, key=lambda e: parse_date(e)[0], reverse=True)
-            if sort
-            else library.entries
-        )
-        sections.append((section, entries))
+    else:
+        _p, f = os.path.split(input.name)
+        b, _e = os.path.splitext(f)
+        entries = parse(input.read(), sort)
+        sections.append(("", entries))
 
     if html:
         doc = Doc()
@@ -361,12 +377,13 @@ def bib2html(input, debug, sort, html, bibtex):
                     entry(doc, e)
         print(indent(doc.getvalue()))
 
-    if bibtex:
+    else:
         bf = bibtexparser.BibtexFormat()
         bf.value_column = "auto"
         bf.indent = "  "
 
         for section, entries in sections:
+            print(f"{comment(section)}")
             lib = bibtexparser.Library(blocks=entries)
             mws = [
                 mw.MergeNameParts(allow_inplace_modification=True),
@@ -375,9 +392,8 @@ def bib2html(input, debug, sort, html, bibtex):
             bs = bibtexparser.write_string(
                 lib, prepend_middleware=mws, bibtex_format=bf
             )
-            with open(f"{section}.bib", "w") as o:
-                o.write(bs)
+            print(bs)
 
 
 if __name__ == "__main__":
-    bib2html()  # pyright: ignore
+    bibtox()  # pyright: ignore
