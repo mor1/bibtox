@@ -1,15 +1,22 @@
 _default:
     @just --list
 
+dif := "git diff --minimal --no-index --word-diff=color"
+
 # smoke test
 [group("test")]
-run:
-    uv run -- ./src/bib2html --debug ./test/bibinputs.json
+run-bib:
+    uv run -- ./bibtox --debug ./test/bibinputs.json
+
+[group("test")]
+run-html:
+    uv run -- ./bibtox --debug --html ./test/bibinputs.json
 
 # compare results
 [group("test")]
 compare:
-    diff -us test/gold <(just run 2>/dev/null)
+    {{dif}} test/gold-bib <(just run-bib 2>/dev/null) || true
+    {{dif}} test/gold-html <(just run-html 2>/dev/null) || true
 
 # update environment
 [group("env")]
