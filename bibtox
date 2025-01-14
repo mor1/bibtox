@@ -275,7 +275,6 @@ def parse(content, sort):
     library = bibtexparser.parse_string(
         content,
         append_middleware=[
-            mw.LatexDecodingMiddleware(),
             mw.SeparateCoAuthors(),
             mw.SplitNameParts(),
         ],
