@@ -195,8 +195,9 @@ def venue(doc, bib):
         case _:
             venue = "UNKNOWN VENUE"
 
+    venue = venue.replace(r"\&", "&").strip()
     with doc.tag("span", klass="venue"):
-        doc.asis(f"{venue.strip()}")
+        doc.asis(f"{venue}")
 
     if len(addendum) > 0:
         doc.asis(f"{addendum}")
