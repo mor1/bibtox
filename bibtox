@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 
+"""Processes BibTeX files, sorting and outputting to HTML/BIB."""
+
+# ruff: noqa: G004
+
 import datetime
 import json
 import logging
-import os
+from pathlib import Path
+from typing import TextIO
 
 import bibtexparser
 import click
@@ -21,7 +26,6 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-HOMEPAGES = {}
 DOISVC = "https://doi.org"
 
 ABBREVIATIONS = {
@@ -56,7 +60,8 @@ MONTHS = {
 MONTHS.update([(MONTHS[k], k) for k in MONTHS])
 
 
-def parse_date(bib):
+def parse_date(bib: bibtexparser.model.Entry) -> tuple[str, str, str]:
+    """Parse an entry date, using older `year`, `month` if no `date` provided."""
     date = bib.get("issue_date")
     if date:
         date = date.value
@@ -76,8 +81,8 @@ def parse_date(bib):
     day = " ".join(day if day else "").strip().strip('"')
 
     month = month.strip()
-    month = ABBREVIATIONS[month] if month in ABBREVIATIONS else month
-    month = MONTHS[month] if len(month) > 2 else month
+    month = ABBREVIATIONS.get(month, month)
+    month = MONTHS[month] if len(month) > 2 else month  # noqa: PLR2004
 
     isodate = f"{year}-{month}-{day}" if month else year
     formatted = (
@@ -90,7 +95,12 @@ def parse_date(bib):
     return isodate.strip("-"), formatted, year
 
 
-def authors(doc, bib):
+def authors(
+    doc: Doc,
+    bib: bibtexparser.model.Entry,
+    homepages: None | dict[str, str],
+) -> None:
+    """Format author list as HTML."""
     authors = bib.get("author").value
     with doc.tag("span", klass="authors"):
         for i, author in enumerate(authors):
@@ -103,7 +113,7 @@ def authors(doc, bib):
 
             klass = "author"
             key = f"{author.first[0]} {author.last[0]}"
-            homepage = HOMEPAGES.get(key)
+            homepage = homepages.get(key) if homepages else None
 
             if (author.first[0], author.last[0]) == ("Richard", "Mortier"):
                 klass += " highlight"
@@ -117,51 +127,39 @@ def authors(doc, bib):
                     doc.text(f"{author.merge_last_name_first}")
 
 
-def year(doc, year):
+def year(doc: Doc, year: str) -> None:
+    """Format `year` as HTML."""
     with doc.tag("span", klass="year"):
         doc.text(f" ({year}). ")
 
 
-def title(doc, bib):
+def title(doc: Doc, bib: bibtexparser.model.Entry) -> None:
+    """Format `title` as HTML."""
     title = bib.get("title").value
     with doc.tag("span", klass="title"):
         doc.asis(f"&ldquo;{title}&rdquo;")
     doc.text(". ")
 
 
-def venue(doc, bib):
+def venue(doc: Doc, bib: bibtexparser.model.Entry) -> None:  # noqa: C901, PLR0912, PLR0915
+    """Parse and format `venue` as HTML."""
     addendum = ""
     match bib.entry_type:
         case "inproceedings":
             doc.text("In ")
             venue = bib["booktitle"]
-
             pages = bib.get("pages")
-            if pages:
-                addendum += f" pp.&nbsp;{pages.value}"
-
             address = bib.get("address")
-            if address:
-                addendum += f". {address.value}"
 
         case "article":
             doc.text("In ")
             venue = bib.get("journaltitle")
             if not venue:
                 venue = bib.get("journal")
-            venue = venue.value
 
             volume = bib.get("volume")
-            if volume:
-                addendum += f"&nbsp;{volume.value}"
-
             number = bib.get("number")
-            if number:
-                addendum += f"({number.value})"
-
             pages = bib.get("pages")
-            if pages:
-                addendum += f":{pages.value}"
 
         case "patent":
             venue = "Patent"
@@ -173,15 +171,12 @@ def venue(doc, bib):
                 venue = bib.get("institution")
             if not venue:
                 venue = bib.get("publisher")
-            venue = venue.value
 
         case "inbook":
             doc.text("In ")
             venue = bib.get("volume")
-
             if not venue:
                 venue = bib.get("booktitle")
-            venue = venue.value
 
         case "unpublished":
             venue = ""
@@ -195,6 +190,18 @@ def venue(doc, bib):
         case _:
             venue = "UNKNOWN VENUE"
 
+    if venue and hasattr(venue, "value"):
+        venue = venue.value  # type: ignore[reportGeneralTypeIssues]
+    if "volume" in locals() and volume:  # type: ignore[reportUnboundVariable]
+        addendum += f"&nbsp;{volume.value}"
+    if "number" in locals() and number:  # type: ignore[reportUnboundVariable]
+        addendum += f"({number.value})"
+    if "pages" in locals() and pages:  # type: ignore[reportUnboundVariable]
+        pages = pages.value.replace("--", "&ndash;").strip()
+        addendum += f" pp.&nbsp;{pages}"
+    if "address" in locals() and address:  # type: ignore[reportUnboundVariable]
+        addendum += f". {address.value}"
+
     venue = venue.replace(r"\&", "&").strip()
     with doc.tag("span", klass="venue"):
         doc.asis(f"{venue}")
@@ -203,20 +210,23 @@ def venue(doc, bib):
         doc.asis(f"{addendum}")
 
 
-def publisher(doc, bib):
+def publisher(doc: Doc, bib: bibtexparser.model.Entry) -> None:
+    """Format `publisher` as HTML."""
     publisher = bib.get("publisher")
     if publisher:
         with doc.tag("span", klass="publisher"):
             doc.text(f" ({publisher.value.strip()})")
 
 
-def date(doc, date):
+def date(doc: Doc, date: str) -> None:
+    """Format `date` as HTML."""
     with doc.tag("span", klass="date"):
         doc.text(f"{date}")
     doc.text(". ")
 
 
-def note(doc, bib):
+def note(doc: Doc, bib: bibtexparser.model.Entry) -> None:
+    """Format `note` as HTML."""
     note = bib.get("note")
     if note:
         with doc.tag("span", klass="note"):
@@ -224,26 +234,34 @@ def note(doc, bib):
         doc.text(". ")
 
 
-def doi(doc, bib):
+def doi(doc: Doc, bib: bibtexparser.model.Entry) -> None:
+    """Format `doi` as HTML."""
     doi = bib.get("doi")
     if doi:
-        with doc.tag("span", klass="doi"):
-            with doc.tag("a", href=f"{DOISVC}/{doi.value}"):
-                doc.asis(f"doi:{doi.value}")
+        with doc.tag("span", klass="doi") and doc.tag(
+            "a",
+            href=f"{DOISVC}/{doi.value}",
+        ):
+            doc.asis(f"doi:{doi.value}")
         doc.text(". ")
 
 
-def url(doc, bib):
+def url(doc: Doc, bib: bibtexparser.model.Entry) -> None:
+    """Format `url` as HTML."""
     url = bib.get("url")
     log.debug(f"{url=} {bib=}")
     if url:
-        with doc.tag("span", klass="url"):
-            with doc.tag("a", href=url.value):
-                doc.asis(f"{url.value}")
+        with doc.tag("span", klass="url") and doc.tag("a", href=url.value):
+            doc.asis(f"{url.value}")
         doc.text(". ")
 
 
-def entry(doc, bib):
+def entry(
+    doc: Doc,
+    bib: bibtexparser.model.Entry,
+    homepages: None | dict[str, str],
+) -> None:
+    """Format an `entry` as HTML."""
     klass = ["paper"]
     match bib.entry_type:
         case "article":
@@ -256,7 +274,7 @@ def entry(doc, bib):
     with doc.tag("li", id=bib.key, klass=" ".join(klass)):
         _isodate, fmtdate, yr = parse_date(bib)
 
-        authors(doc, bib)
+        authors(doc, bib, homepages)
         year(doc, yr)
 
         title(doc, bib)
@@ -272,7 +290,8 @@ def entry(doc, bib):
         url(doc, bib)
 
 
-def parse(content, sort):
+def parse(content: str, sort: bool) -> list[bibtexparser.model.Entry]:  # noqa: FBT001
+    """Parse some content, returning (possibly sorted) library of entries."""
     library = bibtexparser.parse_string(
         content,
         append_middleware=[
@@ -295,16 +314,15 @@ def parse(content, sort):
         for failure in library.failed_blocks:
             log.error(f"{failure.start_line}({failure.duplicate_keys}) {failure.raw}")
 
-    entries = (
+    return (
         sorted(library.entries, key=lambda e: parse_date(e)[0], reverse=True)
         if sort
         else library.entries
     )
 
-    return entries
 
-
-def comment(section):
+def comment(section: str) -> str:
+    """Provide header with date/time and section name as a BibTeX comment."""
     dt = datetime.datetime.now().astimezone().isoformat()
     return f"%%commment{{datetime={{{dt}}}, section={{{section}}}}}"
 
@@ -314,55 +332,55 @@ def comment(section):
 @click.option("--debug", default=False, is_flag=True)
 @click.option("--sort/--no-sort", default=True, help="Sort entries.")
 @click.option("--html", default=False, is_flag=True, help="Output HTML.")
-def bibtox(
-    input,
-    debug,
-    sort,
-    html,
-):
+def bibtox(  # noqa: C901
+    input: TextIO,  # noqa: A002
+    debug: bool,  # noqa: FBT001
+    sort: bool,  # noqa: FBT001
+    html: bool,  # noqa: FBT001
+) -> None:
     """Process BibTeX/BibLaTeX input file.
 
     Sort entries if requested. Output to HTML and/or BibTeX.
     """
-
     if debug:
         log.setLevel(logging.DEBUG)
 
+    # load config
+    log.debug(f"{input.name=}")
     config = json.load(input) if input.name.endswith(".json") else None
     log.debug(f"{config=}")
-
-    global HOMEPAGES
-
-    homepages = config.get("homepages") if config else None
-    if homepages:
-        with open(homepages) as f:
-            HOMEPAGES = json.load(f)
-    log.debug(f"{HOMEPAGES=}")
-
-    strings = config.get("strings", "") if config else ""
-    if strings and len(strings) > 0:
-        with open(strings) as f:
-            strings = f.read()
-    log.debug(f"{strings=}")
 
     bibdir = config.get("bibdir", ".") if config else "."
     log.debug(f"{bibdir=}")
 
+    # load author -> homepage URLs
+    homepages = config.get("homepages") if config else None
+    if homepages:
+        with Path(homepages).open("r") as f:
+            homepages = json.load(f)
+    log.debug(f"{homepages=}")
+
+    # load BibTeX abbreviation strings
+    strings = config.get("strings", "") if config else ""
+    if strings and len(strings) > 0:
+        with Path(strings).open("r") as f:
+            strings = f.read()
+    log.debug(f"{strings=}")
+
+    # process sections
     sections = []
     if config:
         for section, filenames in config["sections"].items():
             log.info(f"{section=} {filenames=}")
             content = ""
             for filename in filenames:
-                with open(os.path.join(bibdir, filename)) as f:
+                with Path(bibdir).joinpath(filename).open("r") as f:
                     content += f.read()
 
             entries = parse(strings + content, sort)
             sections.append((section, entries))
 
     else:
-        _p, f = os.path.split(input.name)
-        b, _e = os.path.splitext(f)
         entries = parse(input.read(), sort)
         sections.append(("", entries))
 
@@ -374,8 +392,8 @@ def bibtox(
                 doc.text(section)
             with doc.tag("ol", klass="papers"):
                 for e in entries:
-                    entry(doc, e)
-        print(indent(doc.getvalue()))
+                    entry(doc, e, homepages)
+        print(indent(doc.getvalue()))  # noqa: T201
 
     else:
         bf = bibtexparser.BibtexFormat()
@@ -383,17 +401,19 @@ def bibtox(
         bf.indent = "  "
 
         for section, entries in sections:
-            print(f"{comment(section)}")
+            print(f"{comment(section)}")  # noqa: T201
             lib = bibtexparser.Library(blocks=entries)
             mws = [
                 mw.MergeNameParts(allow_inplace_modification=True),
                 mw.MergeCoAuthors(allow_inplace_modification=True),
             ]
             bs = bibtexparser.write_string(
-                lib, prepend_middleware=mws, bibtex_format=bf
+                lib,
+                prepend_middleware=mws,
+                bibtex_format=bf,
             )
-            print(bs)
+            print(bs)  # noqa: T201
 
 
 if __name__ == "__main__":
-    bibtox()  # pyright: ignore
+    bibtox()
