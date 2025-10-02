@@ -262,7 +262,7 @@ def url(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     """Format `url` as HTML."""
     url = bib.get("url")
     log.debug(f"{url=} {bib=}")
-    if url:
+    if url and not (bib.get("doi") and "doi.org" in url.value):
         with doc.tag("span", klass="url") and doc.tag("a", href=url.value):
             doc.asis(f"{url.value}")
         doc.text(". ")
