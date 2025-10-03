@@ -107,6 +107,22 @@ def parse_date(bib: bibtexparser.model.Entry) -> tuple[str, str, str]:
     return isodate.strip("-"), formatted, year
 
 
+def htmlclean(s: str) -> str:
+    """Clean up `s` for HTML output."""
+
+    return (
+        s.translate(str.maketrans("", "", "{}~"))
+        .replace("--", "&ndash;")
+        .replace("``", "&ldquo;")
+        .replace("''", "&rdquo;")
+        .replace("`", "&lsquo;")
+        .replace("'", "&rsquo;")
+        .replace(r"\&", "&amp;")
+        .replace(r"\,", "&nbsp;")
+        .replace("..", ".;")
+    )
+
+
 def authors(
     doc: Doc,
     bib: bibtexparser.model.Entry,
@@ -147,7 +163,8 @@ def year(doc: Doc, year: str) -> None:
 
 def title(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     """Format `title` as HTML."""
-    title = bib.get("title").value
+    title = htmlclean(bib.get("title").value)
+
     with doc.tag("span", klass="title"):
         doc.asis(f"&ldquo;{title}&rdquo;")
     doc.text(". ")
@@ -209,17 +226,16 @@ def venue(doc: Doc, bib: bibtexparser.model.Entry) -> None:  # noqa: C901, PLR09
     if "number" in locals() and number:  # type: ignore[reportUnboundVariable]
         addendum += f"({number.value})"
     if "pages" in locals() and pages:  # type: ignore[reportUnboundVariable]
-        pages = pages.value.replace("--", "&ndash;").strip()
+        pages = htmlclean(pages.value)
         addendum += f" pp.&nbsp;{pages}"
     if "address" in locals() and address:  # type: ignore[reportUnboundVariable]
         addendum += f". {address.value}"
 
-    venue = venue.replace(r"\&", "&").strip()
     with doc.tag("span", klass="venue"):
-        doc.asis(f"{venue}")
+        doc.asis(f"{htmlclean(venue)}")
 
     if len(addendum) > 0:
-        doc.asis(f"{addendum}")
+        doc.asis(f"{htmlclean(addendum)}")
 
 
 def publisher(doc: Doc, bib: bibtexparser.model.Entry) -> None:
@@ -233,7 +249,7 @@ def publisher(doc: Doc, bib: bibtexparser.model.Entry) -> None:
 def date(doc: Doc, date: str) -> None:
     """Format `date` as HTML."""
     with doc.tag("span", klass="date"):
-        doc.text(f"{date}")
+        doc.asis(f"{htmlclean(date)}")
     doc.text(". ")
 
 
@@ -242,8 +258,9 @@ def note(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     note = bib.get("note")
     if note:
         with doc.tag("span", klass="note"):
-            doc.text(f"{note.value.strip()}".replace("..", "."))
-        doc.text(". ")
+            doc.asis(f"{htmlclean(note.value)}".replace("..", "."))
+        if not note.value.endswith("."):
+            doc.text(". ")
 
 
 def doi(doc: Doc, bib: bibtexparser.model.Entry) -> None:

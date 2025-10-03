@@ -66,10 +66,3 @@ $ uv run bibtox --html test/bibinputs.json | head -5
   <li id="cicconetti24:edgel" class="paper conference"><span class="authors"><span class="author">Cicconetti, C.</span>, <span class="author">Carlini, E.</span>, <span class="author">Hetzel, R.</span>, <span class="author highlight"><a href="https://mort.io/">Mortier, R.</a></span>, <span class="author">Paradell, A.</span> and <span class="author">Sauer, M.</span></span><span class="year"> (2024). </span><span class="title">&ldquo;EDGELESS: A Software Architecture for Stateful FaaS at the Edge&rdquo;</span>. In <span class="venue">Proceedings of the 33rd International Symposium on High-Performance Parallel and Distributed Computing (HPDC)</span> pp.&nbsp;393-–396. Pisa, Italy<span class="publisher"> (Association for Computing Machinery)</span>. <span class="date">2024</span>. <span class="doi"><a href="https://doi.org/10.1145/3625549.3658817">doi:10.1145/3625549.3658817</a></span>. <span class="url"><a href="https://doi.org/10.1145/3625549.3658817">https://doi.org/10.1145/3625549.3658817</a></span>. </li>
 ...
 ```
-
-# TODO
-
-+ handle extended `month` format eg., `month = jan # "{~1--3}",`
-+ handle escaped words in fields (eg., `title`, `venue`) eg., `... ({DIS})...`
-+ handle smart quotes eg., ` ``Best Papers of VLDB'06'' `
-+ 
