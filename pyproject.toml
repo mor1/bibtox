@@ -1,0 +1,8 @@
+[tool.basedpyright]
+extraPaths = [
+  # obtain the relevant script-specific component via
+  #
+  # uv python find --script bibtox | cut -d"/" -f7`
+  #
+  "/home/mort/.cache/uv/environments-v2/bibtox-0f347c00f770e2e1/lib/python3.13/site-packages",
+]
