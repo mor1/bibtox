@@ -6,3 +6,5 @@ extraPaths = [
   #
   "/home/mort/.cache/uv/environments-v2/bibtox-0f347c00f770e2e1/lib/python3.13/site-packages",
 ]
+typeCheckingMode = "all"
+reportUnknownMemberType = "none"

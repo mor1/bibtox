@@ -14,8 +14,6 @@
 
 """Processes BibTeX files, sorting and outputting to HTML/BIB."""
 
-# ruff: noqa: G004
-
 import datetime
 import json
 import logging
@@ -74,6 +72,8 @@ MONTHS.update([(MONTHS[k], k) for k in MONTHS])
 
 def parse_date(bib: bibtexparser.model.Entry) -> tuple[str, str, str]:
     """Parse an entry date, using older `year`, `month` if no `date` provided."""
+
+    log.debug(f"{bib}")
     date = bib.get("issue_date")
     if date:
         date = date.value
@@ -94,7 +94,7 @@ def parse_date(bib: bibtexparser.model.Entry) -> tuple[str, str, str]:
 
     month = month.strip()
     month = ABBREVIATIONS.get(month, month)
-    month = MONTHS[month] if len(month) > 2 else month  # noqa: PLR2004
+    month = MONTHS[month] if len(month) > 2 else month
 
     isodate = f"{year}-{month}-{day}" if month else year
     formatted = (
@@ -125,7 +125,7 @@ def htmlclean(s: str) -> str:
 
 def authors(
     doc: Doc,
-    bib: bibtexparser.model.Entry,
+    bib: bibtexparser.model.Entry,  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
     homepages: None | dict[str, str],
 ) -> None:
     """Format author list as HTML."""
@@ -170,7 +170,7 @@ def title(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     doc.text(". ")
 
 
-def venue(doc: Doc, bib: bibtexparser.model.Entry) -> None:  # noqa: C901, PLR0912, PLR0915
+def venue(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     """Parse and format `venue` as HTML."""
     addendum = ""
     match bib.entry_type:
@@ -319,7 +319,7 @@ def entry(
         url(doc, bib)
 
 
-def parse(content: str, sort: bool) -> list[bibtexparser.model.Entry]:  # noqa: FBT001
+def parse(content: str, sort: bool) -> list[bibtexparser.model.Entry]:
     """Parse some content, returning (possibly sorted) library of entries."""
     library = bibtexparser.parse_string(
         content,
@@ -361,11 +361,11 @@ def comment(section: str) -> str:
 @click.option("--debug", default=False, is_flag=True)
 @click.option("--sort/--no-sort", default=True, help="Sort entries.")
 @click.option("--html", default=False, is_flag=True, help="Output HTML.")
-def bibtox(  # noqa: C901
-    input: TextIO,  # noqa: A002
-    debug: bool,  # noqa: FBT001
-    sort: bool,  # noqa: FBT001
-    html: bool,  # noqa: FBT001
+def bibtox(
+    input: TextIO,
+    debug: bool,
+    sort: bool,
+    html: bool,
 ) -> None:
     """Process BibTeX/BibLaTeX input file.
 
@@ -422,7 +422,7 @@ def bibtox(  # noqa: C901
             with doc.tag("ol", klass="papers"):
                 for e in entries:
                     entry(doc, e, homepages)
-        print(indent(doc.getvalue()))  # noqa: T201
+        print(indent(doc.getvalue()))
 
     else:
         bf = bibtexparser.BibtexFormat()
@@ -430,7 +430,7 @@ def bibtox(  # noqa: C901
         bf.indent = "  "
 
         for section, entries in sections:
-            print(f"{comment(section)}")  # noqa: T201
+            print(f"{comment(section)}")
             lib = bibtexparser.Library(blocks=entries)
             mws = [
                 mw.MergeNameParts(allow_inplace_modification=True),
@@ -441,7 +441,7 @@ def bibtox(  # noqa: C901
                 prepend_middleware=mws,
                 bibtex_format=bf,
             )
-            print(bs)  # noqa: T201
+            print(bs)
 
 
 if __name__ == "__main__":
