@@ -267,12 +267,9 @@ def doi(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     """Format `doi` as HTML."""
     doi = bib.get("doi")
     if doi:
-        with doc.tag("span", klass="doi") and doc.tag(
-            "a",
-            href=f"{DOISVC}/{doi.value}",
-        ):
-            doc.asis(f"doi:{doi.value}")
-        doc.text(". ")
+        with doc.tag("span", klass="doi"):
+            with doc.tag("a", href=f"{DOISVC}/{doi.value}"):
+                doc.asis(f"doi")
 
 
 def url(doc: Doc, bib: bibtexparser.model.Entry) -> None:
@@ -280,9 +277,18 @@ def url(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     url = bib.get("url")
     log.debug(f"{url=} {bib=}")
     if url and not (bib.get("doi") and "doi.org" in url.value):
-        with doc.tag("span", klass="url") and doc.tag("a", href=url.value):
-            doc.asis(f"{url.value}")
-        doc.text(". ")
+        with doc.tag("span", klass="url"):
+            with doc.tag("a", href=url.value):
+                doc.asis(f"url")
+
+
+def pdf(doc: Doc, bib: bibtexparser.model.Entry) -> None:
+    """Format `pdf` as HTML."""
+    pdf = bib.get("pdf")
+    log.debug(f"{pdf=} {bib=}")
+    with doc.tag("span", klass="pdf"):
+        with doc.tag("a", href=pdf.value):
+            doc.asis(f"pdf")
 
 
 def entry(
@@ -419,7 +425,7 @@ def bibtox(
         for section, entries in sections:
             with doc.tag("section", klass="papers"):
                 doc.text(section)
-            with doc.tag("ol", klass="papers"):
+            with doc.tag("ol", "reversed", klass="papers"):
                 for e in entries:
                     entry(doc, e, homepages)
         print(indent(doc.getvalue()))
