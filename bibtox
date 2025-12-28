@@ -14,15 +14,25 @@
 
 """Processes BibTeX files, sorting and outputting to HTML/BIB."""
 
+# pyright: reportAny=false
+# pyright: reportAttributeAccessIssue=false
+# pyright: reportMissingParameterType=false
+# pyright: reportPrivateLocalImportUsage=false
+# pyright: reportUnknownArgumentType=false
+# pyright: reportUnknownMemberType=false
+# pyright: reportUnknownParameterType=false
+# pyright: reportUnknownVariableType=false
+
 import datetime
 import json
 import logging
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, override
 
 import bibtexparser
 import click
 from bibtexparser import middlewares as mw
+from bibtexparser.middlewares import BlockMiddleware
 from rich.console import Console
 from rich.logging import RichHandler
 from yattag import Doc, indent
@@ -125,7 +135,7 @@ def htmlclean(s: str) -> str:
 
 def authors(
     doc: Doc,
-    bib: bibtexparser.model.Entry,  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+    bib: bibtexparser.model.Entry,
     homepages: None | dict[str, str],
 ) -> None:
     """Format author list as HTML."""
@@ -172,7 +182,14 @@ def title(doc: Doc, bib: bibtexparser.model.Entry) -> None:
 
 def venue(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     """Parse and format `venue` as HTML."""
+
     addendum = ""
+    address = None
+    number = None
+    pages = None
+    venue = None
+    volume = None
+
     match bib.entry_type:
         case "inproceedings":
             doc.text("In ")
@@ -220,15 +237,15 @@ def venue(doc: Doc, bib: bibtexparser.model.Entry) -> None:
             venue = "UNKNOWN VENUE"
 
     if venue and hasattr(venue, "value"):
-        venue = venue.value  # type: ignore[reportGeneralTypeIssues]
-    if "volume" in locals() and volume:  # type: ignore[reportUnboundVariable]
+        venue = venue.value
+    if "volume" in locals() and volume:
         addendum += f"&nbsp;{volume.value}"
-    if "number" in locals() and number:  # type: ignore[reportUnboundVariable]
+    if "number" in locals() and number:
         addendum += f"({number.value})"
-    if "pages" in locals() and pages:  # type: ignore[reportUnboundVariable]
+    if "pages" in locals() and pages:
         pages = htmlclean(pages.value)
         addendum += f" pp.&nbsp;{pages}"
-    if "address" in locals() and address:  # type: ignore[reportUnboundVariable]
+    if "address" in locals() and address:
         addendum += f". {address.value}"
 
     with doc.tag("span", klass="venue"):
@@ -269,7 +286,7 @@ def doi(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     if doi:
         with doc.tag("span", klass="doi"):
             with doc.tag("a", href=f"{DOISVC}/{doi.value}"):
-                doc.asis(f"doi")
+                doc.asis("doi")
 
 
 def url(doc: Doc, bib: bibtexparser.model.Entry) -> None:
@@ -279,7 +296,7 @@ def url(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     if url and not (bib.get("doi") and "doi.org" in url.value):
         with doc.tag("span", klass="url"):
             with doc.tag("a", href=url.value):
-                doc.asis(f"url")
+                doc.asis("url")
 
 
 def pdf(doc: Doc, bib: bibtexparser.model.Entry) -> None:
@@ -288,7 +305,7 @@ def pdf(doc: Doc, bib: bibtexparser.model.Entry) -> None:
     log.debug(f"{pdf=} {bib=}")
     with doc.tag("span", klass="pdf"):
         with doc.tag("a", href=pdf.value):
-            doc.asis(f"pdf")
+            doc.asis("pdf")
 
 
 def entry(
@@ -330,6 +347,7 @@ def parse(content: str, sort: bool) -> list[bibtexparser.model.Entry]:
     library = bibtexparser.parse_string(
         content,
         append_middleware=[
+            mw.MonthAbbreviationMiddleware(),
             mw.SeparateCoAuthors(),
             mw.SplitNameParts(),
         ],
@@ -362,6 +380,26 @@ def comment(section: str) -> str:
     return f"%%commment{{datetime={{{dt}}}, section={{{section}}}}}"
 
 
+class RemoveIntEnclosures(BlockMiddleware):
+    def __init__(
+        self,
+    ):
+        super().__init__()
+
+    # def transform(self, library, *args, **kwargs):
+    #     log.debug(f"transform")
+    #     return library
+
+    @override
+    def transform_entry(self, entry, *args, **kwargs):
+        log.debug(f"transform_entry: {entry.get('month').value}")
+        return entry
+
+    # def transform_string(self, string, *args, **kwargs):
+    #     log.debug(f"transform_string: {string}")
+    #     return string
+
+
 @click.command(context_settings={"show_default": True})
 @click.argument("input", type=click.File("r"))
 @click.option("--debug", default=False, is_flag=True)
@@ -385,7 +423,7 @@ def bibtox(
     config = json.load(input) if input.name.endswith(".json") else None
     log.debug(f"{config=}")
 
-    bibdir = config.get("bibdir", ".") if config else "."
+    bibdir: str = config.get("bibdir", ".") if config else "."
     log.debug(f"{bibdir=}")
 
     # load author -> homepage URLs
@@ -441,6 +479,7 @@ def bibtox(
             mws = [
                 mw.MergeNameParts(allow_inplace_modification=True),
                 mw.MergeCoAuthors(allow_inplace_modification=True),
+                RemoveIntEnclosures(),
             ]
             bs = bibtexparser.write_string(
                 lib,
