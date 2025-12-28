@@ -374,10 +374,10 @@ def parse(content: str, sort: bool) -> list[bibtexparser.model.Entry]:
     )
 
 
-def comment(section: str) -> str:
+def header(section: str) -> str:
     """Provide header with date/time and section name as a BibTeX comment."""
     dt = datetime.datetime.now().astimezone().isoformat()
-    return f"%%commment{{datetime={{{dt}}}, section={{{section}}}}}"
+    return f"%%comment{{datetime={{{dt}}}, section={{{section}}}}}"
 
 
 class RemoveIntEnclosures(BlockMiddleware):
@@ -474,7 +474,7 @@ def bibtox(
         bf.indent = "  "
 
         for section, entries in sections:
-            print(f"{comment(section)}")
+            print(f"{header(section)}\n")
             lib = bibtexparser.Library(blocks=entries)
             mws = [
                 mw.MergeNameParts(allow_inplace_modification=True),
@@ -486,7 +486,7 @@ def bibtox(
                 prepend_middleware=mws,
                 bibtex_format=bf,
             )
-            print(bs)
+            print(bs.strip())
 
 
 if __name__ == "__main__":
