@@ -27,3 +27,9 @@ sync:
 [group("env")]
 lock:
     uv lock
+
+# validate bib files
+[group("test")]
+[no-cd]
+validate tgt:
+    biber --tool --validate-datamodel {{file_stem(tgt)}}.bib
