@@ -496,12 +496,14 @@ def bibtox(
     if html:
         doc = Doc()
         doc.text("{{dummy}}\n")
+        n = sum([len(es) for _, es in sections])
         for section, entries in sections:
             with doc.tag("section", klass="papers"):
                 doc.text(section)
-            with doc.tag("ol", "reversed", klass="papers"):
+            with doc.tag("ol", reversed="reversed", start=n, klass="papers"):
                 for e in entries:
                     entry(doc, e, homepages)
+            n -= len(entries)
         print(indent(doc.getvalue()))
 
     else:
