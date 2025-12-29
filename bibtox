@@ -400,63 +400,97 @@ class RemoveIntEnclosures(BlockMiddleware):
     #     return string
 
 
-@click.command(context_settings={"show_default": True})
-@click.argument("input", type=click.File("r"))
+@click.command(
+    context_settings={"show_default": True, "ignore_unknown_options": True},
+)
+@click.argument("inputs", nargs=-1, type=click.File("r"))
 @click.option("--debug", default=False, is_flag=True)
-@click.option("--sort/--no-sort", default=True, help="Sort entries.")
 @click.option("--html", default=False, is_flag=True, help="Output HTML.")
+@click.option("--sort/--no-sort", default=True, help="Sort entries.")
+@click.option(
+    "--homepages",
+    "homepagesf",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Author-Homepage mapping (JSON dictionary)",
+)
+@click.option(
+    "--section", default="", type=str, help="Section heading for HTML output."
+)
+@click.option(
+    "--strings",
+    "stringsf",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Abbreviations mapping.",
+)
 def bibtox(
-    input: TextIO,
+    inputs: tuple[TextIO, ...],
     debug: bool,
-    sort: bool,
     html: bool,
+    sort: bool,
+    homepagesf: Path | None,
+    section: str,
+    stringsf: Path | None,
 ) -> None:
-    """Process BibTeX/BibLaTeX input file.
+    """Process BibTeX/BibLaTeX input file(s).
 
     Sort entries if requested. Output to HTML and/or BibTeX.
     """
     if debug:
         log.setLevel(logging.DEBUG)
 
-    # load config
-    log.debug(f"{input.name=}")
-    config = json.load(input) if input.name.endswith(".json") else None
+    # load config if there is only one input and it's a JSON file
+    log.debug(f"inputs={[i.name for i in inputs]}")
+    config = (
+        json.load(inputs[0])
+        if len(inputs) == 1 and inputs[0].name.endswith(".json")
+        else None
+    )
     log.debug(f"{config=}")
 
-    bibdir: str = config.get("bibdir", ".") if config else "."
-    log.debug(f"{bibdir=}")
+    # load {author:homepages}, preferring command line option to config file
+    if not homepagesf:
+        homepagesf = Path(config.get("homepages")) if config else None
+    log.debug(f"{homepagesf=}")
 
-    # load author -> homepage URLs
-    homepages = config.get("homepages") if config else None
-    if homepages:
-        with Path(homepages).open("r") as f:
+    homepages = {}
+    if homepagesf:
+        with homepagesf.open("r") as f:
             homepages = json.load(f)
+
     log.debug(f"{homepages=}")
 
     # load BibTeX abbreviation strings
-    strings = config.get("strings", "") if config else ""
-    if strings and len(strings) > 0:
-        with Path(strings).open("r") as f:
+    if not stringsf:
+        stringsf = Path(config.get("strings")) if config else None
+
+    strings = ""
+    if stringsf:
+        with stringsf.open("r") as f:
             strings = f.read()
+
     log.debug(f"{strings=}")
 
     # process sections
-    sections = []
-    if config:
-        for section, filenames in config["sections"].items():
-            log.info(f"{section=} {filenames=}")
-            content = ""
-            for filename in filenames:
-                with Path(bibdir).joinpath(filename).open("r") as f:
-                    content += f.read()
-
-            entries = parse(strings + content, sort)
-            sections.append((section, entries))
-
+    if config and "sections" in config:
+        items = {(k, [Path(v) for v in vs]) for k, vs in config["sections"].items()}
     else:
-        entries = parse(input.read(), sort)
-        sections.append(("", entries))
+        items = {(section, inputs)}
 
+    log.debug(f"{items=}")
+
+    sections = []
+    for section, filenames in items:
+        log.info(f"{section=} {filenames=}")
+        content = ""
+        for filename in filenames:
+            content += filename.read()
+
+        entries = parse(strings + content, sort)
+        sections.append((section, entries))
+
+    log.debug(f"{sections=}")
+
+    # output HTML or (default) BibTeX
     if html:
         doc = Doc()
         doc.text("{{dummy}}\n")
