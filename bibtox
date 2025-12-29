@@ -403,7 +403,9 @@ class RemoveIntEnclosures(BlockMiddleware):
 @click.command(
     context_settings={"show_default": True, "ignore_unknown_options": True},
 )
-@click.argument("inputs", nargs=-1, type=click.File("r"))
+@click.argument(
+    "inputs", nargs=-1, type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
 @click.option("--debug", default=False, is_flag=True)
 @click.option("--html", default=False, is_flag=True, help="Output HTML.")
 @click.option("--sort/--no-sort", default=True, help="Sort entries.")
@@ -439,12 +441,11 @@ def bibtox(
         log.setLevel(logging.DEBUG)
 
     # load config if there is only one input and it's a JSON file
-    log.debug(f"inputs={[i.name for i in inputs]}")
-    config = (
-        json.load(inputs[0])
-        if len(inputs) == 1 and inputs[0].name.endswith(".json")
-        else None
-    )
+    log.debug(f"{inputs=}")
+    config = None
+    if len(inputs) == 1 and inputs[0].name.endswith(".json"):
+        with inputs[0].open("r") as f:
+            config = json.load(f)
     log.debug(f"{config=}")
 
     # load {author:homepages}, preferring command line option to config file
@@ -472,9 +473,9 @@ def bibtox(
 
     # process sections
     if config and "sections" in config:
-        items = {(k, [Path(v) for v in vs]) for k, vs in config["sections"].items()}
+        items = [(k, [Path(v) for v in vs]) for k, vs in config["sections"].items()]
     else:
-        items = {(section, inputs)}
+        items = [(section, inputs)]
 
     log.debug(f"{items=}")
 
@@ -483,7 +484,8 @@ def bibtox(
         log.info(f"{section=} {filenames=}")
         content = ""
         for filename in filenames:
-            content += filename.read()
+            with filename.open("r") as f:
+                content += f.read()
 
         entries = parse(strings + content, sort)
         sections.append((section, entries))
